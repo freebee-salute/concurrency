@@ -10,13 +10,17 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Main {
+    public static HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_2).build();
+    public static HttpRequest request = HttpRequest.newBuilder().uri(URI.create("http://localhost:8080/hello")).GET().build();
+
     public static void main(String[] args) {
-        ExecutorService executionService = Executors.newFixedThreadPool(22);
+        int poolSize = Runtime.getRuntime().availableProcessors() * (1 + 10 / 5);
+        System.out.println("PoolSize: " + poolSize);
+        ExecutorService executionService = Executors.newFixedThreadPool(2);
         List<Future<Void>> futures = new ArrayList<>();
         long startTime = System.currentTimeMillis();
-        int totalTasks = 1000;
+        int totalTasks = 10000;
         AtomicInteger completedCount = new AtomicInteger(0);
-
         for (int i = 0; i < totalTasks; i++) {
             futures.add(executionService.submit(() -> {
                 getResponseAsync();
@@ -28,7 +32,7 @@ public class Main {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> {
             Logger.logCompletionsPerSecond(startTime, completedCount.get(), totalTasks);
-        }, 1, 10, TimeUnit.MILLISECONDS);
+        }, 1, 100, TimeUnit.MILLISECONDS);
 
         try {
             for (Future<Void> future : futures) {
@@ -44,10 +48,8 @@ public class Main {
     }
 
     private static void getResponseAsync() {
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder().uri(URI.create("https://random-data-api.com/api/address/random_address")).GET().build();
-
-        String response = client.sendAsync(request, HttpResponse.BodyHandlers.ofString()).thenApply(HttpResponse::body).join(); // Wait for completion
-        Writer.logToFile(response);
+        client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(HttpResponse::body)
+                .thenAccept(Writer::logToFile); // Wait for completion
     }
 }
